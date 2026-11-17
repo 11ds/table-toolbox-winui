@@ -81,11 +81,12 @@ jobs:
       - name: Publish Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: winui-v3
-          name: 表格工具箱 - 原生窗口版（内容即原网页）
+          tag_name: winui-v4
+          name: 表格工具箱 - 原生窗口版 v4（原生外观 + 拖放导入）
           body: |
-            WinUI 3 原生窗口，内容区直接承载您原来的表格工具箱网页，逻辑一字未改。
-            识别 / 对比 / 派生 / 导入导出 与网页版完全一致，完全离线。
+            原生窗口 + 原网页：识别 / 对比 / 派生 / 导入导出 全部沿用原页面逻辑，未做改写。
+            本版新增：界面按 Windows 11 原生风格统一（配色、描边、圆角、控件高度），
+            并支持把 Excel / WPS / CSV / TXT 文件直接拖进窗口导入（拖到哪张表就进哪张表）。
             解压后双击 表格工具箱.exe（web 文件夹要和 exe 放一起）。
           files: TableToolbox-NativeWindow.zip
           generate_release_notes: false

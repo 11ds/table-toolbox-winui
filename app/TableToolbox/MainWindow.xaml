@@ -11,7 +11,7 @@
         <!-- 原网页：所有功能、样式、逻辑一字未改 -->
         <muxc:WebView2 x:Name="Web" />
 
-        <!-- 兜底：WebView2 组件不可用时提示，并可改用浏览器打开 -->
+        <!-- 兜底：找不到网页文件时提示，并可改用浏览器打开 -->
         <StackPanel x:Name="Fallback"
                     Visibility="Collapsed"
                     HorizontalAlignment="Center"

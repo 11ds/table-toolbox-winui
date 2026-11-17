@@ -58,9 +58,8 @@ namespace TableToolbox
                     "TableToolbox", "WebView2");
                 Directory.CreateDirectory(dataDir);
 
-                var options = new CoreWebView2EnvironmentOptions();
-                var env = await CoreWebView2Environment.CreateAsync(null, dataDir, options);
-                await Web.EnsureCoreWebView2Async(env);
+                // 让控件自己创建运行环境（不手写 CoreWebView2Environment，兼容性最好）
+                await Web.EnsureCoreWebView2Async();
 
                 var core = Web.CoreWebView2;
                 core.Settings.AreDevToolsEnabled = false;

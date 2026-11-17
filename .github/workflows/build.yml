@@ -68,26 +68,26 @@ jobs:
             Write-Error "web\index.html missing in repo"; exit 1
           }
           "表格工具箱（原生窗口 + 原网页）`r`n`r`n双击 表格工具箱.exe 即可运行，无需安装。`r`n本窗口是原生应用窗口，里面的内容就是原来的表格工具箱网页，功能与网页完全一致。`r`n注意：web 文件夹要和 exe 放在同一目录，不要只拷 exe。" | Out-File -Encoding utf8 stage\使用说明.txt
-          Compress-Archive -Path stage\* -DestinationPath 表格工具箱-原生窗口版.zip -Force
-          $z = Get-Item 表格工具箱-原生窗口版.zip
+          Compress-Archive -Path stage\* -DestinationPath TableToolbox-NativeWindow.zip -Force
+          $z = Get-Item TableToolbox-NativeWindow.zip
           Write-Host "ZIP_SIZE=$($z.Length)"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: toolbox-exe
-          path: 表格工具箱-原生窗口版.zip
+          path: TableToolbox-NativeWindow.zip
 
       - name: Publish Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: winui-v2
+          tag_name: winui-v3
           name: 表格工具箱 - 原生窗口版（内容即原网页）
           body: |
             WinUI 3 原生窗口，内容区直接承载您原来的表格工具箱网页，逻辑一字未改。
             识别 / 对比 / 派生 / 导入导出 与网页版完全一致，完全离线。
             解压后双击 表格工具箱.exe（web 文件夹要和 exe 放一起）。
-          files: 表格工具箱-原生窗口版.zip
+          files: TableToolbox-NativeWindow.zip
           generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

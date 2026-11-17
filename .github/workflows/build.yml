@@ -60,11 +60,12 @@ jobs:
           Write-Host "EXE_NAME=$($exe.Name)"
           $f = Get-Item (Join-Path stage $exe.Name)
           Write-Host "EXE_SIZE=$($f.Length)"
-          if (Test-Path app\TableToolbox\out\web) {
-            Copy-Item app\TableToolbox\out\web stage\web -Recurse -Force
+          if (Test-Path 'app\TableToolbox\web\index.html') {
+            New-Item -ItemType Directory -Force -Path stage\web | Out-Null
+            Copy-Item 'app\TableToolbox\web\index.html' 'stage\web\index.html' -Force
             Write-Host "WEB_COPIED"
           } else {
-            Write-Error "web\index.html missing in publish output"; exit 1
+            Write-Error "web\index.html missing in repo"; exit 1
           }
           "表格工具箱（原生窗口 + 原网页）`r`n`r`n双击 表格工具箱.exe 即可运行，无需安装。`r`n本窗口是原生应用窗口，里面的内容就是原来的表格工具箱网页，功能与网页完全一致。`r`n注意：web 文件夹要和 exe 放在同一目录，不要只拷 exe。" | Out-File -Encoding utf8 stage\使用说明.txt
           Compress-Archive -Path stage\* -DestinationPath 表格工具箱-原生窗口版.zip -Force

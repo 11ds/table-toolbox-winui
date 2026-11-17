@@ -49,7 +49,9 @@ jobs:
           New-Item -ItemType Directory -Force -Path stage | Out-Null
           $exe = Get-ChildItem -Path TableToolbox\out -Filter *.exe -File | Select-Object -First 1
           if (-not $exe) { Write-Error "No exe found"; exit 1 }
-          Copy-Item $exe.FullName stage\表格工具箱.exe -Force
+          # 关键：保留编译产物原名，绝不改名（WinAppSDK 1.8 单文件 exe 改名会导致 XAML 解析崩溃）
+          Copy-Item $exe.FullName (Join-Path stage $exe.Name) -Force
+          Write-Host "EXE_NAME=$($exe.Name)"
           "真 WinUI 3 原生版`n`n双击 exe 即可运行，无需安装任何东西。`n所有功能本地运行，不联网。" | Out-File -Encoding utf8 stage\使用说明.txt
           Compress-Archive -Path stage\* -DestinationPath 表格工具箱-WinUI原生版.zip -Force
           $f = Get-Item 表格工具箱-WinUI原生版.zip

@@ -22,7 +22,7 @@
     <PublishSingleFile>true</PublishSingleFile>
     <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
     <PublishTrimmed>false</PublishTrimmed>
-    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <EnableCompressionInSingleFile>false</EnableCompressionInSingleFile>
     <DebugType>none</DebugType>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
   </PropertyGroup>

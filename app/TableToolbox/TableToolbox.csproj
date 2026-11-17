@@ -37,11 +37,11 @@
     <Manifest Include="$(ApplicationManifest)" />
   </ItemGroup>
 
-  <!-- 原网页随 exe 一起发布到 web\index.html，程序启动时读它 -->
+  <!-- 原网页编译进 exe 内部：只有一份来源，发布目录不会出现第二份可能过期的副本。
+       运行时释放到 %LOCALAPPDATA%\TableToolbox\web\index.html 再加载。 -->
   <ItemGroup>
-    <Content Include="web\index.html">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-    </Content>
+    <EmbeddedResource Include="web\index.html">
+      <LogicalName>TableToolbox.web.index.html</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
 </Project>

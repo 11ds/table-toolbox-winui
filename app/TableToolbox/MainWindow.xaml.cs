@@ -3,17 +3,25 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.Web.WebView2.Core;
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
+using System.Text.Json;
 using System.Threading.Tasks;
+using Windows.ApplicationModel.DataTransfer;
+using Windows.Storage;
 
 namespace TableToolbox
 {
     /// <summary>
-    /// 原生 WinUI 3 窗口，内容区直接承载用户原来的「表格工具箱.html」。
+    /// 原生 WinUI 3 窗口，内容区直接承载用户原来的「表格工具箱」网页。
     /// 网页逻辑一字未改：识别 / 对比 / 派生 / 导入导出 全部沿用原页面实现。
     /// </summary>
     public sealed partial class MainWindow : Window
     {
+        private const string ResourceName = "TableToolbox.web.index.html";
+        private const long SingleFileLimit = 24L * 1024 * 1024; // 单文件上限，超过就提示不导入
+
         private string webFolder;
         private string indexPath;
         private bool started;
@@ -58,29 +66,13 @@ namespace TableToolbox
             try
             {
                 App.Log("base dir = " + AppContext.BaseDirectory);
-                string source = LocateHtml();
-                if (source == null)
-                {
-                    ShowFallback(new FileNotFoundException("没找到网页文件 index.html（web 文件夹需与 exe 放在一起）"));
-                    return;
-                }
-                App.Log("html source = " + source);
 
-                // 统一复制到 %LOCALAPPDATA%\TableToolbox\web\index.html，用纯英文路径承载
+                // 页面唯一来源 = 编译进 exe 的嵌入资源，避免出现第二份过期副本
                 webFolder = CacheFolder();
                 indexPath = Path.Combine(webFolder, "index.html");
-                if (!(File.Exists(indexPath) && new FileInfo(indexPath).Length == new FileInfo(source).Length))
-                {
-                    File.Copy(source, indexPath, true);
-                }
-                App.Log("cached html = " + indexPath);
+                long pageLen = ExtractPage(indexPath);
+                App.Log("page bytes = " + pageLen + " -> " + indexPath);
 
-                string dataDir = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                    "TableToolbox", "WebView2");
-                Directory.CreateDirectory(dataDir);
-
-                // 让控件自己创建运行环境（不手写 CoreWebView2Environment，兼容性最好）
                 await Web.EnsureCoreWebView2Async();
 
                 var core = Web.CoreWebView2;
@@ -90,7 +82,7 @@ namespace TableToolbox
                 core.Settings.IsZoomControlEnabled = true;
                 core.Settings.AreBrowserAcceleratorKeysEnabled = true;
 
-                // 允许从资源管理器把文件拖进页面（默认即为 true，这里显式置位，避免不同版本默认值差异）
+                // 允许从资源管理器把文件拖进页面（默认即为 true，这里显式置位）
                 try
                 {
                     var prop = Web.GetType().GetProperty("AllowExternalDrop");
@@ -106,9 +98,18 @@ namespace TableToolbox
                 core.NewWindowRequested += Core_NewWindowRequested;
                 core.PermissionRequested += (s, e) => { e.State = CoreWebView2PermissionState.Allow; };
 
-                // 用虚拟域名承载，避免 file:// 的跨域/下载限制
+                // 用虚拟域名承载，避免 file:// 的跨域 / 下载限制
                 core.SetVirtualHostNameToFolderMapping(
                     "app.local", webFolder, CoreWebView2HostResourceAccessKind.Allow);
+
+                core.NavigationCompleted += (s, e) =>
+                {
+                    App.Log("navigation: " + e.IsSuccess + " " + (e.WebErrorStatus.ToString()));
+                    if (!e.IsSuccess)
+                    {
+                        ShowFallback(new Exception("页面加载失败：" + e.WebErrorStatus));
+                    }
+                };
 
                 core.Navigate("https://app.local/index.html");
                 App.Log("navigate app.local/index.html");
@@ -117,6 +118,103 @@ namespace TableToolbox
             {
                 App.Log("startup FAIL: " + ex);
                 ShowFallback(ex);
+            }
+        }
+
+        /* ==================== 原生拖放（不依赖 WebView2 的 HTML5 拖放） ==================== */
+
+        private async void Drop_DragOver(object sender, DragEventArgs e)
+        {
+            try
+            {
+                if (!e.DataView.Contains(StandardDataFormats.StorageItems)) return;
+                e.AcceptedOperation = DataPackageOperation.Copy;
+                e.DragUIOverride.Caption = "松开导入到表格";
+                e.DragUIOverride.IsCaptionVisible = true;
+                e.Handled = true;
+                await RunScriptAsync("window.__nwDragState && window.__nwDragState(true,-1)");
+            }
+            catch { }
+        }
+
+        private async void Drop_DragLeave(object sender, DragEventArgs e)
+        {
+            try
+            {
+                await RunScriptAsync("window.__nwDragState && window.__nwDragState(false,-1)");
+            }
+            catch { }
+        }
+
+        private async void Drop_Drop(object sender, DragEventArgs e)
+        {
+            if (!e.DataView.Contains(StandardDataFormats.StorageItems)) return;
+            var deferral = e.GetDeferral();
+            try
+            {
+                var items = await e.DataView.GetStorageItemsAsync();
+                var payload = new List<Dictionary<string, string>>();
+
+                foreach (var item in items)
+                {
+                    var file = item as StorageFile;
+                    if (file == null) continue;
+
+                    var props = await file.GetBasicPropertiesAsync();
+                    if ((long)props.Size > SingleFileLimit)
+                    {
+                        App.Log("drop skipped (too big): " + file.Name + " " + props.Size);
+                        continue;
+                    }
+
+                    var buffer = await FileIO.ReadBufferAsync(file);
+                    byte[] bytes = new byte[buffer.Length];
+                    using (var reader = Windows.Storage.Streams.DataReader.FromBuffer(buffer))
+                    {
+                        reader.ReadBytes(bytes);
+                    }
+
+                    payload.Add(new Dictionary<string, string>
+                    {
+                        { "name", file.Name },
+                        { "b64", Convert.ToBase64String(bytes) }
+                    });
+                    App.Log("drop file: " + file.Name + " " + bytes.Length + " bytes");
+                }
+
+                if (payload.Count == 0)
+                {
+                    App.Log("drop: no importable file");
+                    return;
+                }
+
+                string json = JsonSerializer.Serialize(payload);
+                string result = await RunScriptAsync(
+                    "window.__nwImportFiles && window.__nwImportFiles(" + json + ",-1)");
+                App.Log("drop -> " + result);
+            }
+            catch (Exception ex)
+            {
+                App.Log("drop FAIL: " + ex);
+            }
+            finally
+            {
+                deferral.Complete();
+            }
+        }
+
+        private async Task<string> RunScriptAsync(string js)
+        {
+            try
+            {
+                if (Web.CoreWebView2 == null) return "no-core";
+                string r = await Web.CoreWebView2.ExecuteScriptAsync(js);
+                return r;
+            }
+            catch (Exception ex)
+            {
+                App.Log("script FAIL: " + ex.Message);
+                return "script-error";
             }
         }
 
@@ -139,9 +237,8 @@ namespace TableToolbox
             {
                 Web.Visibility = Visibility.Collapsed;
                 Fallback.Visibility = Visibility.Visible;
-                FallbackText.Text = "内嵌页面启动失败。\n" +
-                                    "请确认 exe 同目录下有 web\\index.html（解压后别只拷 exe 一个文件）。\n\n" +
-                                    "详细信息：" + ex.Message;
+                FallbackText.Text = "内嵌页面启动失败。\n\n详细信息：" + ex.Message +
+                                    "\n\n可点下面的按钮，用系统浏览器打开同一份页面（功能完全一致）。";
             }
             catch { }
         }
@@ -151,11 +248,10 @@ namespace TableToolbox
             try
             {
                 string target = indexPath;
-                if (string.IsNullOrEmpty(target) || !File.Exists(target)) target = LocateHtml();
-                if (target == null)
+                if (string.IsNullOrEmpty(target) || !File.Exists(target))
                 {
-                    FallbackText.Text = "找不到网页文件，请重新解压完整压缩包。";
-                    return;
+                    target = Path.Combine(CacheFolder(), "index.html");
+                    ExtractPage(target);
                 }
                 System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(target)
                 {
@@ -168,26 +264,28 @@ namespace TableToolbox
             }
         }
 
-        /// <summary>按优先级找网页：exe 同目录 web\index.html → 同目录 表格工具箱.html → 本地缓存</summary>
-        private static string LocateHtml()
+        /// <summary>把编译进 exe 的网页释放到本地纯英文路径；大小一致就不重写。返回释放后的字节数。</summary>
+        private static long ExtractPage(string target)
         {
-            string baseDir = AppContext.BaseDirectory;
-            string[] candidates =
+            var asm = Assembly.GetExecutingAssembly();
+            using (Stream s = asm.GetManifestResourceStream(ResourceName))
             {
-                Path.Combine(baseDir, "web", "index.html"),
-                Path.Combine(baseDir, "表格工具箱.html"),
-                Path.Combine(baseDir, "index.html"),
-                Path.Combine(CacheFolder(), "index.html")
-            };
-            foreach (var c in candidates)
-            {
-                try
+                if (s == null)
                 {
-                    if (File.Exists(c) && new FileInfo(c).Length > 1024) return c;
+                    var names = string.Join(", ", asm.GetManifestResourceNames());
+                    throw new InvalidOperationException("嵌入的网页资源缺失（现有资源：" + names + "）");
                 }
-                catch { }
+
+                long len = s.Length;
+                var fi = new FileInfo(target);
+                if (fi.Exists && fi.Length == len) return len;
+
+                using (var fs = new FileStream(target, FileMode.Create, FileAccess.Write, FileShare.None))
+                {
+                    s.CopyTo(fs);
+                }
+                return len;
             }
-            return null;
         }
 
         private static string CacheFolder()

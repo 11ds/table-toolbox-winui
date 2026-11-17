@@ -23,11 +23,21 @@ jobs:
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
-      - name: Prepare icon
+      # 硬性校验：包里承载的页面必须是「注入过新皮肤和新拖放脚本」的那一份，
+      # 否则直接失败，绝不产出一个界面没变的包。
+      - name: Verify embedded page
         shell: pwsh
         run: |
-          if (Test-Path 'TableToolbox\app.ico') { Copy-Item 'TableToolbox\app.ico' 'app\TableToolbox\app.ico' -Force }
-          if (-not (Test-Path 'app\TableToolbox\app.ico')) { Write-Error 'app.ico missing'; exit 1 }
+          $p = 'app\TableToolbox\web\index.html'
+          if (-not (Test-Path $p)) { Write-Error "page missing: $p"; exit 1 }
+          $html = Get-Content $p -Raw -Encoding UTF8
+          if ($html -notmatch 'nw-native-theme') { Write-Error "page is NOT skinned (missing nw-native-theme)"; exit 1 }
+          if ($html -notmatch 'nw-native-drop')  { Write-Error "page has NO drop script (missing nw-native-drop)"; exit 1 }
+          if ($html -notmatch '__nwImportFiles') { Write-Error "page has NO native drop bridge"; exit 1 }
+          $f = Get-Item $p
+          $h = (Get-FileHash $p -Algorithm SHA256).Hash
+          Write-Host "PAGE_SIZE=$($f.Length)"
+          Write-Host "PAGE_SHA=$h"
 
       - name: Restore
         working-directory: app/TableToolbox
@@ -58,37 +68,49 @@ jobs:
           # 关键：保留编译产物原名，绝不改名（WinAppSDK 1.8 单文件 exe 改名会导致 XAML 解析崩溃）
           Copy-Item $exe.FullName (Join-Path stage $exe.Name) -Force
           Write-Host "EXE_NAME=$($exe.Name)"
-          $f = Get-Item (Join-Path stage $exe.Name)
-          Write-Host "EXE_SIZE=$($f.Length)"
-          if (Test-Path 'app\TableToolbox\web\index.html') {
-            New-Item -ItemType Directory -Force -Path stage\web | Out-Null
-            Copy-Item 'app\TableToolbox\web\index.html' 'stage\web\index.html' -Force
-            Write-Host "WEB_COPIED"
-          } else {
-            Write-Error "web\index.html missing in repo"; exit 1
-          }
-          "表格工具箱（原生窗口 + 原网页）`r`n`r`n双击 表格工具箱.exe 即可运行，无需安装。`r`n本窗口是原生应用窗口，里面的内容就是原来的表格工具箱网页，功能与网页完全一致。`r`n注意：web 文件夹要和 exe 放在同一目录，不要只拷 exe。" | Out-File -Encoding utf8 stage\使用说明.txt
-          Compress-Archive -Path stage\* -DestinationPath TableToolbox-NativeWindow.zip -Force
-          $z = Get-Item TableToolbox-NativeWindow.zip
-          Write-Host "ZIP_SIZE=$($z.Length)"
+          Write-Host "EXE_SIZE=$($exe.Length)"
+          Write-Host "EXE_SHA=$((Get-FileHash $exe.FullName -Algorithm SHA256).Hash)"
+          # 发布目录里不应该再出现第二份网页，出现就是打包方式回退了
+          $stray = Get-ChildItem -Path app\TableToolbox\out -Filter index.html -Recurse -ErrorAction SilentlyContinue
+          if ($stray) { Write-Error "unexpected index.html in publish output: $($stray.FullName)"; exit 1 }
+
+          $readme = @(
+            '表格工具箱 · 便携版（绿色，免安装）',
+            '',
+            '用法：把 表格工具箱.exe 放到任意文件夹，双击即可运行。',
+            '不需要安装，不需要 .NET 运行时，不需要联网；页面已经编译进 exe 内部，没有旁的文件夹要带。',
+            '',
+            '功能与网页版一致：',
+            '  1. 上传两个文件（或直接粘贴/拖文件进窗口）',
+            '  2. 选择对比项和附加字段',
+            '  3. 预览对比结果，选择输出表格；或切到「派生表格生成」输出派生表',
+            '',
+            '数据只在本机处理，不联网、不上传。'
+          )
+          $readme -join "`r`n" | Out-File -Encoding utf8 stage\使用说明.txt
+
+          Compress-Archive -Path stage\* -DestinationPath TableToolbox-Portable.zip -Force
+          Write-Host "ZIP_SIZE=$((Get-Item TableToolbox-Portable.zip).Length)"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: toolbox-exe
-          path: TableToolbox-NativeWindow.zip
+          name: toolbox-portable
+          path: TableToolbox-Portable.zip
 
       - name: Publish Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: winui-v4
-          name: 表格工具箱 - 原生窗口版 v4（原生外观 + 拖放导入）
+          tag_name: winui-v5
+          name: 表格工具箱 - 便携版 v5（全新界面 + 拖放导入）
           body: |
-            原生窗口 + 原网页：识别 / 对比 / 派生 / 导入导出 全部沿用原页面逻辑，未做改写。
-            本版新增：界面按 Windows 11 原生风格统一（配色、描边、圆角、控件高度），
-            并支持把 Excel / WPS / CSV / TXT 文件直接拖进窗口导入（拖到哪张表就进哪张表）。
-            解压后双击 表格工具箱.exe（web 文件夹要和 exe 放一起）。
-          files: TableToolbox-NativeWindow.zip
+            单个 exe，绿色免安装，双击即用。页面已编译进 exe 内部，不需要旁边的 web 文件夹。
+
+            本版内容：
+            1. 界面整体重做：Windows 11 原生配色与控件规范，标题/步骤/卡片层级更清晰，控件更大更好点。
+            2. 文件可以直接拖进窗口导入（Excel / WPS / CSV / TXT，可多选）。
+            3. 识别、对比、派生、导出的操作流程与网页版完全一致，一行逻辑都没改。
+          files: TableToolbox-Portable.zip
           generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

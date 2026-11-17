@@ -43,8 +43,13 @@
         <!-- 标题栏下细分隔线 -->
         <Border Grid.Row="0" Height="1" VerticalAlignment="Bottom" Background="#E8E8E8"/>
 
-        <!-- 网页内容区：原页面原样承载 -->
-        <Grid Grid.Row="1">
+        <!-- 网页内容区：原页面原样承载；整块区域接受从资源管理器拖进来的文件 -->
+        <Grid Grid.Row="1"
+              AllowDrop="True"
+              DragEnter="Drop_DragOver"
+              DragOver="Drop_DragOver"
+              DragLeave="Drop_DragLeave"
+              Drop="Drop_Drop">
             <muxc:WebView2 x:Name="Web" />
 
             <!-- 兜底：找不到网页文件时提示 -->

@@ -1,21 +1,25 @@
 /* ============================================================
-   文件拖放导入（新增交互，不改动原有导入流程）
-   做法：把拖进来的文件塞进该表格卡片原本隐藏的
-   <input type="file" multiple>，再派发一次 change 事件，
-   页面原有的 handleFile() 就会照常处理 —— 解析、工作表选择、
-   多表追加、错误提示，全部复用原逻辑，没有第二套实现。
+   文件拖放导入（新增交互层，不改动原有导入流程）
+   ------------------------------------------------------------
+   两条入口，最终都汇到同一个函数 importInto()：
+   1) 窗口内 HTML5 拖放（浏览器 / WebView2 允许时）
+   2) 原生窗口拖放：C# 侧把文件读成 base64，调用
+      window.__nwImportFiles([{name, b64}])，这里还原成 File 对象
+   两条路都不碰解析逻辑：文件塞进卡片原本隐藏的
+   <input type="file" multiple>，再派发 change，
+   页面原有的 handleFile() 照常处理（解析、选工作表、多表追加、报错）。
    ============================================================ */
 (function () {
   'use strict';
 
   var EXT = /\.(xlsx|xls|xlsm|xlsb|et|csv|txt|tsv|tab)$/i;
-  var ARROW = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#0067C0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v10m0 0l-3.5-3.5M12 14l3.5-3.5"/><path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>';
+  var ARROW = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#0067C0" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v10m0 0l-3.5-3.5M12 14l3.5-3.5"/><path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>';
 
   var mask = null;
   var activeCard = null;
   var dragDepth = 0;
 
-  /* ---------- 小提示（与页面 toast 风格一致，独立实现，互不影响） ---------- */
+  /* ---------- 提示条 ---------- */
   function toast(msg, ms) {
     var el = document.createElement('div');
     el.className = 'nw-toast';
@@ -36,16 +40,13 @@
         '<div class="nw-drop-icon">' + ARROW + '</div>' +
         '<div class="nw-drop-title">松开即可导入</div>' +
         '<div class="nw-drop-sub">Excel / WPS / CSV / TXT</div>' +
-        '<div class="nw-drop-tip">可一次拖入多个文件 · 对着某张表松手就导入那一张</div>' +
+        '<div class="nw-drop-tip">可一次拖入多个 · 对着某张表松手就进那一张</div>' +
       '</div>';
     document.body.appendChild(mask);
     return mask;
   }
 
-  function showMask() {
-    ensureMask().classList.add('show');
-  }
-
+  function showMask() { ensureMask().classList.add('show'); }
   function hideMask() {
     dragDepth = 0;
     if (mask) mask.classList.remove('show');
@@ -75,7 +76,7 @@
     return el.closest('.table-card');
   }
 
-  /* 没落在某张卡片上时：优先给第一张空表，否则给第一张表
+  /* 没落在卡片上：先给第一张空表，否则给第一张表
      （与原「上传」按钮的落点规则一致：空表填进去，非空则新增） */
   function fallbackCard() {
     var cards = [].slice.call(document.querySelectorAll('.table-card'));
@@ -100,7 +101,7 @@
     if (!ok.length) return;
 
     var input = card.querySelector('input[type=file]');
-    if (!input) { toast('这张表没有可用的导入入口，请刷新页面重试'); return; }
+    if (!input) { toast('这张表没有导入入口，请刷新页面重试'); return; }
 
     try {
       var dt = new DataTransfer();
@@ -113,7 +114,52 @@
     }
   }
 
-  /* ---------- 事件 ---------- */
+  /* ---------- 原生窗口调用入口（C# 拖放用） ---------- */
+  /* items: [{ name: 'a.csv', b64: '...' }]
+     index: 目标卡片序号（可选，-1/不传 = 按落点规则） */
+  function b64ToBytes(b64) {
+    var bin = atob(b64.replace(/\s+/g, ''));
+    var len = bin.length;
+    var bytes = new Uint8Array(len);
+    for (var i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes;
+  }
+
+  function makeFile(item) {
+    var bytes = b64ToBytes(item.b64 || '');
+    var type = /\.csv$/i.test(item.name) ? 'text/csv'
+             : /\.(txt|tsv|tab)$/i.test(item.name) ? 'text/plain'
+             : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    return new File([bytes], item.name, { type: type });
+  }
+
+  window.__nwImportFiles = function (items, index) {
+    try {
+      if (!items || !items.length) return 'no-files';
+      var cards = [].slice.call(document.querySelectorAll('.table-card'));
+      var card = (typeof index === 'number' && index >= 0 && cards[index]) ? cards[index] : fallbackCard();
+      if (!card) return 'no-card';
+      var files = items.map(makeFile);
+      importInto(card, files);
+      return 'ok:' + files.length;
+    } catch (err) {
+      toast('导入失败：' + (err && err.message ? err.message : err), 4800);
+      return 'error:' + (err && err.message ? err.message : err);
+    }
+  };
+
+  /* 原生拖动态：显示/隐藏遮罩（WebView2 内部不派发 HTML5 drag 时由外壳调用） */
+  window.__nwDragState = function (on, index) {
+    if (on) {
+      showMask();
+      var cards = [].slice.call(document.querySelectorAll('.table-card'));
+      highlight((typeof index === 'number' && index >= 0 && cards[index]) ? cards[index] : null);
+    } else {
+      hideMask();
+    }
+  };
+
+  /* ---------- HTML5 拖放 ---------- */
   document.addEventListener('dragenter', function (e) {
     if (!hasFiles(e)) return;          // 拖文字、拖选区时完全不插手
     e.preventDefault();
@@ -150,7 +196,7 @@
   window.addEventListener('dragend', hideMask);
   window.addEventListener('blur', hideMask);
 
-  /* ---------- 页头加一句拖放提示（纯装饰，不改原有文字） ---------- */
+  /* ---------- 页头提示胶囊（纯装饰） ---------- */
   (function addHint() {
     var sub = document.querySelector('.sub');
     if (!sub || sub.querySelector('.nw-drag-hint')) return;

@@ -2,12 +2,24 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI;
 using Microsoft.UI.Windowing;
 using System;
+using System.IO;
 
 namespace TableToolbox
 {
     public partial class App : Application
     {
         public static MainWindow RootWindow { get; private set; }
+        static string LogPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TableToolbox", "startup.log");
+
+        public static void Log(string msg)
+        {
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(LogPath));
+                File.AppendAllText(LogPath, DateTime.Now.ToString("HH:mm:ss") + " " + msg + Environment.NewLine);
+            }
+            catch { }
+        }
 
         // Shared state passed from compare page to derive page (scheme C: derive is based on compare result)
         public static CompareCore.CompareResult SharedCompare;
@@ -17,22 +29,42 @@ namespace TableToolbox
 
         public App()
         {
-            this.InitializeComponent();
+            Log("=== App ctor start ===");
+            try
+            {
+                this.InitializeComponent();
+                Log("InitializeComponent OK");
+            }
+            catch (Exception ex)
+            {
+                Log("InitializeComponent FAIL: " + ex.ToString());
+                throw;
+            }
             this.UnhandledException += App_UnhandledException;
         }
 
         private void App_UnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
         {
+            Log("UNHANDLED: " + (e.Exception != null ? e.Exception.ToString() : "null"));
             e.Handled = true;
-            try { System.Diagnostics.Debug.WriteLine("Unhandled: " + e.Exception.Message); } catch { }
         }
 
         protected override void OnLaunched(LaunchActivatedEventArgs args)
         {
-            RootWindow = new MainWindow();
-            RootWindow.Activate();
+            Log("OnLaunched start");
+            try
+            {
+                RootWindow = new MainWindow();
+                Log("MainWindow created");
+                RootWindow.Activate();
+                Log("MainWindow activated");
+            }
+            catch (Exception ex)
+            {
+                Log("MainWindow FAIL: " + ex.ToString());
+                throw;
+            }
 
-            // Center on screen with a sensible default size
             try
             {
                 IntPtr hWnd = WinRT.Interop.WindowNative.GetWindowHandle(RootWindow);
@@ -47,8 +79,13 @@ namespace TableToolbox
                     int y = area.Y + Math.Max(0, (area.Height - h) / 2);
                     apw.MoveAndResize(new Windows.Graphics.RectInt32(x, y, w, h));
                 }
+                Log("Window size set");
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Log("Window size FAIL: " + ex.Message);
+            }
+            Log("OnLaunched done");
         }
     }
 }

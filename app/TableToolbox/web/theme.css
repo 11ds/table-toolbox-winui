@@ -933,3 +933,37 @@ html, body { height: 100%; overflow: hidden !important; }
 #nwContent.nw-wide .map-table select,
 #nwContent.nw-wide .map-table .sel { max-width: 200px !important; }
 #nwContent.nw-wide .map-table { min-width: 0; }
+
+/* ============================================================
+   原生手感细节
+   ------------------------------------------------------------
+   这一段的每一项都是「怎么像原生窗口」，没有一条参与业务逻辑：
+   光标、文本可选范围、滚到头的回弹、图标拖拽、焦点框。
+   ============================================================ */
+
+/* 1) 非输入区域用箭头光标（网页里到处是 I 型光标，最容易露馅） */
+html, body { cursor: default; }
+textarea,
+input:not([type=checkbox]):not([type=radio]):not([type=range]),
+[contenteditable="true"] { cursor: text; }
+
+/* 2) 外壳文字不可选中，正文/表格仍可正常选中复制 */
+#nwRail, .nw-topbar, .nw-step, .nw-nav-item, .nw-brand, .nw-rail-title,
+.nw-rail-foot, #nwContent > .panel > h2, .cfg-label, .table-card > h3 {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* 3) 滚到边界不再「橡皮筋」回弹 */
+#nwContent, .result-scroll, .pv-scroll, .exp-preview-box, textarea { overscroll-behavior: contain; }
+
+/* 4) 图标不参与拖拽，避免拖图变成本地文件 */
+img, svg { -webkit-user-drag: none; }
+
+/* 5) 焦点框：键盘操作时给强调色细描边，鼠标点击不出框 */
+:focus { outline: none; }
+:focus-visible { outline: 2px solid var(--nw-accent) !important; outline-offset: 1px; }
+
+/* 6) 拖放遮罩淡入，别硬闪 */
+#nwDropMask.show { animation: nwMaskIn .12s ease-out; }
+@keyframes nwMaskIn { from { opacity: .4; } to { opacity: 1; } }

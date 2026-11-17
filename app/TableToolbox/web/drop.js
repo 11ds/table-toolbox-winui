@@ -18,6 +18,9 @@
   var mask = null;
   var activeCard = null;
   var dragDepth = 0;
+  var lastKey = '';
+  var lastAt = 0;
+  var nativeTimer = null;
 
   /* ---------- 提示条 ---------- */
   function toast(msg, ms) {
@@ -49,6 +52,7 @@
   function showMask() { ensureMask().classList.add('show'); }
   function hideMask() {
     dragDepth = 0;
+    if (nativeTimer) { clearTimeout(nativeTimer); nativeTimer = null; }
     if (mask) mask.classList.remove('show');
     highlight(null);
   }
@@ -90,6 +94,12 @@
 
   function importInto(card, files) {
     if (!card || !files.length) return;
+
+    // 同一次拖放可能被「页面 HTML5 drop」和「原生拖放」两条路同时触发，短窗口内去重，避免重复导入
+    var key = files.map(function (f) { return f.name + ':' + f.size; }).join('|');
+    var now = Date.now();
+    if (key === lastKey && now - lastAt < 800) return;
+    lastKey = key; lastAt = now;
 
     var ok = [], bad = [];
     files.forEach(function (f) { (EXT.test(f.name) ? ok : bad).push(f); });
@@ -135,6 +145,7 @@
 
   window.__nwImportFiles = function (items, index) {
     try {
+      hideMask();                      // 松手就收：原生路径页面上收不到 drop，只能靠这里清
       if (!items || !items.length) return 'no-files';
       var cards = [].slice.call(document.querySelectorAll('.table-card'));
       var card = (typeof index === 'number' && index >= 0 && cards[index]) ? cards[index] : fallbackCard();
@@ -148,16 +159,26 @@
     }
   };
 
-  /* 原生拖动态：显示/隐藏遮罩（WebView2 内部不派发 HTML5 drag 时由外壳调用） */
+  /* 原生拖动态：显示/隐藏遮罩（WebView2 内部不派发 HTML5 drag 时由外壳调用）
+     外壳的 DragOver 在鼠标移动时会持续调用，用「看门狗」兜底：
+     哪怕一次 hide 都没送到（拖到窗口外松手、被别的程序截走），遮罩也会自己消失。 */
   window.__nwDragState = function (on, index) {
+    if (nativeTimer) { clearTimeout(nativeTimer); nativeTimer = null; }
     if (on) {
       showMask();
       var cards = [].slice.call(document.querySelectorAll('.table-card'));
       highlight((typeof index === 'number' && index >= 0 && cards[index]) ? cards[index] : null);
+      nativeTimer = setTimeout(function () {
+        nativeTimer = null;
+        hideMask();
+      }, 4000);
     } else {
       hideMask();
     }
   };
+
+  /* 外壳主动收遮罩（Drop / DragLeave 时调用） */
+  window.__nwHideDrop = function () { hideMask(); };
 
   /* ---------- HTML5 拖放 ---------- */
   document.addEventListener('dragenter', function (e) {
@@ -195,6 +216,10 @@
 
   window.addEventListener('dragend', hideMask);
   window.addEventListener('blur', hideMask);
+  window.addEventListener('focus', hideMask);
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) hideMask();
+  });
 
   /* ---------- 页头提示胶囊（纯装饰） ---------- */
   (function addHint() {

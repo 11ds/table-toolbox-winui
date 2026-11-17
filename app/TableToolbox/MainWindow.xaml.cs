@@ -73,7 +73,15 @@ namespace TableToolbox
                 long pageLen = ExtractPage(indexPath);
                 App.Log("page bytes = " + pageLen + " -> " + indexPath);
 
-                await Web.EnsureCoreWebView2Async();
+                // 顺手清掉旧版本留在 exe 旁边的 WebView2 缓存目录，保持便携版「只有一个 exe」
+                CleanLegacyDataFolder();
+
+                // 关键：必须自己指定用户数据目录。用无参 EnsureCoreWebView2Async 时，
+                // WebView2 默认会在 exe 同级生成「<exe 名>.WebView2」文件夹 —— 就是「双击后多出来一个文件夹」。
+                string userData = WebDataFolder();
+                var env = await CoreWebView2Environment.CreateAsync(null, userData, null);
+                await Web.EnsureCoreWebView2Async(env);
+                App.Log("webview2 data = " + userData);
 
                 var core = Web.CoreWebView2;
                 core.Settings.AreDevToolsEnabled = false;
@@ -81,6 +89,15 @@ namespace TableToolbox
                 core.Settings.AreDefaultContextMenusEnabled = true;
                 core.Settings.IsZoomControlEnabled = true;
                 core.Settings.AreBrowserAcceleratorKeysEnabled = true;
+
+                // 关掉浏览器味最重的几项：后退手势、自动填充、密码保存（都是纯 WebView 行为，与页面功能无关）
+                try
+                {
+                    core.Settings.IsSwipeNavigationEnabled = false;
+                    core.Settings.IsGeneralAutofillEnabled = false;
+                    core.Settings.IsPasswordAutosaveEnabled = false;
+                }
+                catch (Exception ex) { App.Log("settings (optional) skip: " + ex.Message); }
 
                 // 允许从资源管理器把文件拖进页面（默认即为 true，这里显式置位）
                 try
@@ -137,18 +154,25 @@ namespace TableToolbox
             catch { }
         }
 
-        private async void Drop_DragLeave(object sender, DragEventArgs e)
+        private void Drop_DragLeave(object sender, DragEventArgs e)
         {
-            try
-            {
-                await RunScriptAsync("window.__nwDragState && window.__nwDragState(false,-1)");
-            }
-            catch { }
+            HideDropMask();
+        }
+
+        /// <summary>收起页面里的拖放遮罩。原生拖放被这里接管时，页面收不到 dragleave/drop，
+        /// 必须由外壳主动收，否则松手后那个「松开即可导入」的框会一直挂在那儿。</summary>
+        private void HideDropMask()
+        {
+            _ = RunScriptAsync("window.__nwDragState && window.__nwDragState(false,-1)");
         }
 
         private async void Drop_Drop(object sender, DragEventArgs e)
         {
-            if (!e.DataView.Contains(StandardDataFormats.StorageItems)) return;
+            if (!e.DataView.Contains(StandardDataFormats.StorageItems))
+            {
+                HideDropMask();      // 拖的不是文件（比如一段文字），也要把遮罩收掉
+                return;
+            }
             var deferral = e.GetDeferral();
             try
             {
@@ -199,6 +223,8 @@ namespace TableToolbox
             }
             finally
             {
+                // 先收遮罩再收尾：无论导入成功与否，松手都必须让遮罩消失
+                HideDropMask();
                 deferral.Complete();
             }
         }
@@ -295,6 +321,42 @@ namespace TableToolbox
                 "TableToolbox", "web");
             Directory.CreateDirectory(folder);
             return folder;
+        }
+
+        /// <summary>WebView2 用户数据目录固定放 %LOCALAPPDATA%，绝不在 exe 旁边留东西。</summary>
+        private static string WebDataFolder()
+        {
+            string folder = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "TableToolbox", "WebView2");
+            Directory.CreateDirectory(folder);
+            return folder;
+        }
+
+        /// <summary>清掉旧版本遗留在 exe 旁边的「xxx.exe.WebView2」目录；被占用删不掉就跳过。</summary>
+        private static void CleanLegacyDataFolder()
+        {
+            try
+            {
+                string dir = AppContext.BaseDirectory;
+                if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir)) return;
+                foreach (var path in Directory.GetDirectories(dir, "*.WebView2"))
+                {
+                    try
+                    {
+                        Directory.Delete(path, true);
+                        App.Log("legacy data folder removed: " + path);
+                    }
+                    catch (Exception ex)
+                    {
+                        App.Log("legacy data folder busy (skip): " + ex.Message);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                App.Log("CleanLegacyDataFolder FAIL: " + ex.Message);
+            }
         }
     }
 }

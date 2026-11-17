@@ -3,6 +3,8 @@ using Microsoft.UI;
 using Microsoft.UI.Windowing;
 using System;
 using System.IO;
+using System.Runtime.InteropServices;
+using System.Text.Json;
 
 namespace TableToolbox
 {
@@ -10,6 +12,11 @@ namespace TableToolbox
     {
         public static MainWindow RootWindow { get; private set; }
         static string LogPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TableToolbox", "startup.log");
+        static string StatePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TableToolbox", "window.json");
+
+        // 窗口最小尺寸（DIP）：再小左栏和内容区就挤成一团了
+        private const int MinWidthDip = 980;
+        private const int MinHeightDip = 620;
 
         public static void Log(string msg)
         {
@@ -66,17 +73,9 @@ namespace TableToolbox
                 AppWindow apw = AppWindow.GetFromWindowId(id);
                 apw.Title = "表格工具箱";
 
-                var display = Microsoft.UI.Windowing.DisplayArea.Primary;
-                if (display != null)
-                {
-                    var area = display.WorkArea;
-                    // 尽量占满工作区，网页版原本就是宽屏布局
-                    int w = Math.Min(1500, Math.Max(1100, area.Width - 80));
-                    int h = Math.Min(980, Math.Max(760, area.Height - 60));
-                    int x = area.X + Math.Max(0, (area.Width - w) / 2);
-                    int y = area.Y + Math.Max(0, (area.Height - h) / 2);
-                    apw.MoveAndResize(new Windows.Graphics.RectInt32(x, y, w, h));
-                }
+                RestoreBounds(apw);
+                HookMinSize(hWnd);
+                apw.Closing += (s, e) => SaveBounds(apw);
                 Log("Window size set");
             }
             catch (Exception ex)
@@ -84,6 +83,161 @@ namespace TableToolbox
                 Log("Window size FAIL: " + ex.Message);
             }
             Log("OnLaunched done");
+        }
+
+        /* ==================== 窗口位置记忆（原生应用的常规行为） ==================== */
+
+        private sealed class WindowState
+        {
+            public int x { get; set; }
+            public int y { get; set; }
+            public int w { get; set; }
+            public int h { get; set; }
+            public bool max { get; set; }
+        }
+
+        private static void RestoreBounds(AppWindow apw)
+        {
+            var area = DisplayArea.Primary.WorkArea;
+            WindowState st = null;
+            try
+            {
+                if (File.Exists(StatePath))
+                    st = JsonSerializer.Deserialize<WindowState>(File.ReadAllText(StatePath));
+            }
+            catch (Exception ex) { Log("read state FAIL: " + ex.Message); }
+
+            int w, h, x, y;
+            bool useSaved = false;
+
+            if (st != null && st.w >= MinWidthDip && st.h >= MinHeightDip)
+            {
+                // 只在窗口还落在当前显示器可视范围内时才沿用（换了显示器/分辨率不会跑到屏幕外）
+                int ox = Math.Max(st.x, area.X);
+                int oy = Math.Max(st.y, area.Y);
+                int oright = Math.Min(st.x + st.w, area.X + area.Width);
+                int obottom = Math.Min(st.y + st.h, area.Y + area.Height);
+                if (oright - ox >= 200 && obottom - oy >= 200)
+                {
+                    w = Math.Min(st.w, area.Width);
+                    h = Math.Min(st.h, area.Height);
+                    x = Math.Max(area.X, Math.Min(st.x, area.X + area.Width - 200));
+                    y = Math.Max(area.Y, Math.Min(st.y, area.Y + area.Height - 120));
+                    useSaved = true;
+                    goto apply;
+                }
+            }
+
+            // 首次运行：居中给一个宽松的尺寸，网页版原本就是宽屏布局
+            w = Math.Min(1500, Math.Max(1100, area.Width - 80));
+            h = Math.Min(980, Math.Max(760, area.Height - 60));
+            x = area.X + Math.Max(0, (area.Width - w) / 2);
+            y = area.Y + Math.Max(0, (area.Height - h) / 2);
+
+        apply:
+            apw.MoveAndResize(new Windows.Graphics.RectInt32(x, y, w, h));
+            if (useSaved && st.max)
+            {
+                try
+                {
+                    if (apw.Presenter is OverlappedPresenter op)
+                        op.Maximize();
+                }
+                catch { }
+            }
+        }
+
+        private static void SaveBounds(AppWindow apw)
+        {
+            try
+            {
+                var op = apw.Presenter as OverlappedPresenter;
+                bool max = op != null && op.State == OverlappedPresenterState.Maximized;
+
+                WindowState st = null;
+                try
+                {
+                    if (File.Exists(StatePath))
+                        st = JsonSerializer.Deserialize<WindowState>(File.ReadAllText(StatePath));
+                }
+                catch { }
+                st = st ?? new WindowState();
+
+                // 最大化时 apw.Size 是最大化后的尺寸，存下来会把下次的正常尺寸顶满，只在非最大化时记尺寸
+                if (!max)
+                {
+                    var pos = apw.Position;
+                    var size = apw.Size;
+                    st.x = pos.X;
+                    st.y = pos.Y;
+                    st.w = size.Width;
+                    st.h = size.Height;
+                }
+                st.max = max;
+
+                Directory.CreateDirectory(Path.GetDirectoryName(StatePath));
+                File.WriteAllText(StatePath, JsonSerializer.Serialize(st));
+            }
+            catch (Exception ex) { Log("save state FAIL: " + ex.Message); }
+        }
+
+        /* ==================== 最小窗口尺寸（WM_GETMINMAXINFO） ==================== */
+
+        private delegate IntPtr SubclassProc(IntPtr hWnd, uint uMsg, IntPtr wParam, IntPtr lParam, UIntPtr uIdSubclass, IntPtr dwRefData);
+
+        [DllImport("comctl32.dll", SetLastError = true)]
+        private static extern bool SetWindowSubclass(IntPtr hWnd, SubclassProc pfnSubclass, UIntPtr uIdSubclass, IntPtr dwRefData);
+
+        [DllImport("comctl32.dll")]
+        private static extern IntPtr DefSubclassProc(IntPtr hWnd, uint uMsg, IntPtr wParam, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        private static extern uint GetDpiForWindow(IntPtr hWnd);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct POINT { public int X; public int Y; }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct MINMAXINFO
+        {
+            public POINT ptReserved;
+            public POINT ptMaxSize;
+            public POINT ptMaxPosition;
+            public POINT ptMinTrackSize;
+            public POINT ptMaxTrackSize;
+        }
+
+        private const uint WM_GETMINMAXINFO = 0x0024;
+        private static SubclassProc _minSizeProc;   // 必须持有引用，否则回调会被回收
+
+        private static void HookMinSize(IntPtr hWnd)
+        {
+            try
+            {
+                _minSizeProc = MinSizeProc;
+                SetWindowSubclass(hWnd, _minSizeProc, (UIntPtr)1, IntPtr.Zero);
+            }
+            catch (Exception ex) { Log("HookMinSize FAIL: " + ex.Message); }
+        }
+
+        private static IntPtr MinSizeProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam, UIntPtr id, IntPtr data)
+        {
+            if (msg == WM_GETMINMAXINFO)
+            {
+                try
+                {
+                    uint dpi = GetDpiForWindow(hWnd);
+                    double scale = dpi == 0 ? 1.0 : dpi / 96.0;
+                    var mmi = Marshal.PtrToStructure<MINMAXINFO>(lParam);
+                    int minW = (int)(MinWidthDip * scale);
+                    int minH = (int)(MinHeightDip * scale);
+                    if (mmi.ptMinTrackSize.X < minW) mmi.ptMinTrackSize.X = minW;
+                    if (mmi.ptMinTrackSize.Y < minH) mmi.ptMinTrackSize.Y = minH;
+                    Marshal.StructureToPtr(mmi, lParam, false);
+                }
+                catch { }
+            }
+            return DefSubclassProc(hWnd, msg, wParam, lParam);
         }
     }
 }

@@ -78,10 +78,30 @@ namespace TableToolbox
 
                 // 关键：必须自己指定用户数据目录。用无参 EnsureCoreWebView2Async 时，
                 // WebView2 默认会在 exe 同级生成「<exe 名>.WebView2」文件夹 —— 就是「双击后多出来一个文件夹」。
+                // 注：不同 SDK 版本里 CoreWebView2Environment.CreateAsync 的重载个数不一致，
+                // 直接写 CreateAsync(null, dir, null) 会在某些版本上编译不过，所以用反射挑能用的那个；
+                // 再叠一层官方支持的环境变量兜底。
                 string userData = WebDataFolder();
-                var env = await CoreWebView2Environment.CreateAsync(null, userData, null);
-                await Web.EnsureCoreWebView2Async(env);
-                App.Log("webview2 data = " + userData);
+                try { Environment.SetEnvironmentVariable("WEBVIEW2_USER_DATA_FOLDER", userData); }
+                catch (Exception ex) { App.Log("set WEBVIEW2_USER_DATA_FOLDER FAIL: " + ex.Message); }
+
+                var env = await TryCreateEnvironmentAsync(userData);
+                if (env != null)
+                {
+                    await Web.EnsureCoreWebView2Async(env);
+                    App.Log("webview2 env created with userData=" + userData);
+                }
+                else
+                {
+                    await Web.EnsureCoreWebView2Async();
+                    App.Log("webview2 env fallback (env var only) -> " + userData);
+                }
+
+                try
+                {
+                    App.Log("webview2 user data folder = " + Web.CoreWebView2.Environment.UserDataFolder);
+                }
+                catch (Exception ex) { App.Log("read UserDataFolder FAIL: " + ex.Message); }
 
                 var core = Web.CoreWebView2;
                 core.Settings.AreDevToolsEnabled = false;
@@ -321,6 +341,51 @@ namespace TableToolbox
                 "TableToolbox", "web");
             Directory.CreateDirectory(folder);
             return folder;
+        }
+
+        /// <summary>按「参数里带 userDataFolder 的那一版」反射调用 CoreWebView2Environment.CreateAsync。
+        /// 各 SDK 版本重载个数不同（2 个或 3 个），写死参数会编译失败，这里只挑能用的。</summary>
+        private static async Task<CoreWebView2Environment> TryCreateEnvironmentAsync(string userDataFolder)
+        {
+            try
+            {
+                foreach (var m in typeof(CoreWebView2Environment).GetMethods(
+                             System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static))
+                {
+                    if (m.Name != "CreateAsync") continue;
+                    var ps = m.GetParameters();
+                    if (ps.Length < 1 || ps.Length > 3) continue;
+                    if (ps[0].ParameterType != typeof(string)) continue;
+
+                    var args = new object[ps.Length];
+                    for (int i = 0; i < ps.Length; i++)
+                    {
+                        if (ps[i].ParameterType == typeof(string))
+                        {
+                            string name = ps[i].Name ?? "";
+                            args[i] = name.IndexOf("userData", StringComparison.OrdinalIgnoreCase) >= 0
+                                ? userDataFolder : null;
+                        }
+                        else args[i] = null;
+                    }
+
+                    try
+                    {
+                        object r = m.Invoke(null, args);
+                        if (r is Task<CoreWebView2Environment> task) return await task;
+                        if (r is Windows.Foundation.IAsyncOperation<CoreWebView2Environment> op) return await op;
+                    }
+                    catch (Exception ex)
+                    {
+                        App.Log("CreateAsync/" + ps.Length + " FAIL: " + ex.Message);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                App.Log("CreateAsync reflect FAIL: " + ex.Message);
+            }
+            return null;
         }
 
         /// <summary>WebView2 用户数据目录固定放 %LOCALAPPDATA%，绝不在 exe 旁边留东西。</summary>

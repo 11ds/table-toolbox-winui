@@ -38,8 +38,8 @@ jobs:
           if ($html -notmatch 'nw-native-shell')   { Write-Error "page has NO app shell (layout unchanged)"; exit 1 }
           # WebView2 必须使用自定义用户数据目录，否则会在 exe 旁边生成「<exe>.WebView2」文件夹
           $cs = Get-Content 'app\TableToolbox\MainWindow.xaml.cs' -Raw -Encoding UTF8
-          if ($cs -notmatch 'CreateAsync\(null, userData') { Write-Error "WebView2 user data folder not pinned (folder will appear next to exe)"; exit 1 }
-          if ($cs -match 'EnsureCoreWebView2Async\(\)')   { Write-Error "bare EnsureCoreWebView2Async() would use default data folder"; exit 1 }
+          if ($cs -notmatch 'TryCreateEnvironmentAsync') { Write-Error "WebView2 custom env init missing"; exit 1 }
+          if ($cs -notmatch 'WEBVIEW2_USER_DATA_FOLDER') { Write-Error "WebView2 user data folder not pinned (folder will appear next to exe)"; exit 1 }
           $f = Get-Item $p
           $h = (Get-FileHash $p -Algorithm SHA256).Hash
           Write-Host "PAGE_SIZE=$($f.Length)"

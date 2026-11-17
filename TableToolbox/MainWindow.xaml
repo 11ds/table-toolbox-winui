@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="TableToolbox.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
+    xmlns:local="using:TableToolbox"
+    Title="表格工具箱"
+    muxc:BackdropMaterial.ApplyToRootOrPageBackground="True">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Title bar (custom drag region) -->
+        <Grid x:Name="TitleBar" Grid.Row="0" Height="48" Background="Transparent">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0" Spacing="12">
+                <FontIcon Glyph="&#xE82A;" FontSize="18" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"/>
+                <TextBlock Text="表格工具箱" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                <TextBlock Text="本地离线 · 识别 / 对比 / 派生" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
+            </StackPanel>
+        </Grid>
+
+        <muxc:NavigationView x:Name="NavView"
+                             Grid.Row="1"
+                             IsBackButtonVisible="Collapsed"
+                             IsSettingsVisible="False"
+                             PaneDisplayMode="Left"
+                             SelectionChanged="NavView_SelectionChanged"
+                             Background="Transparent">
+            <muxc:NavigationView.MenuItems>
+                <muxc:NavigationViewItem x:Name="NavRecognize" Content="表格识别" Tag="recognize" IsSelected="True">
+                    <muxc:NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE8B5;"/>
+                    </muxc:NavigationViewItem.Icon>
+                </muxc:NavigationViewItem>
+                <muxc:NavigationViewItem Content="表格对比" Tag="compare">
+                    <muxc:NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE90D;"/>
+                    </muxc:NavigationViewItem.Icon>
+                </muxc:NavigationViewItem>
+                <muxc:NavigationViewItem Content="派生表格" Tag="derive">
+                    <muxc:NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE82A;"/>
+                    </muxc:NavigationViewItem.Icon>
+                </muxc:NavigationViewItem>
+            </muxc:NavigationView.MenuItems>
+
+            <Frame x:Name="ContentFrame" Margin="0"/>
+        </muxc:NavigationView>
+    </Grid>
+</Window>

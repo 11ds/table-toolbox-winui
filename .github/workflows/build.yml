@@ -23,12 +23,18 @@ jobs:
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
+      - name: Prepare icon
+        shell: pwsh
+        run: |
+          if (Test-Path 'TableToolbox\app.ico') { Copy-Item 'TableToolbox\app.ico' 'app\TableToolbox\app.ico' -Force }
+          if (-not (Test-Path 'app\TableToolbox\app.ico')) { Write-Error 'app.ico missing'; exit 1 }
+
       - name: Restore
-        working-directory: TableToolbox
+        working-directory: app/TableToolbox
         run: dotnet restore TableToolbox.csproj
 
       - name: Publish single-file EXE
-        working-directory: TableToolbox
+        working-directory: app/TableToolbox
         run: >
           dotnet publish TableToolbox.csproj
           -c Release
@@ -47,25 +53,40 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path stage | Out-Null
-          $exe = Get-ChildItem -Path TableToolbox\out -Filter *.exe -File | Select-Object -First 1
+          $exe = Get-ChildItem -Path app\TableToolbox\out -Filter *.exe -File | Select-Object -First 1
           if (-not $exe) { Write-Error "No exe found"; exit 1 }
           # 关键：保留编译产物原名，绝不改名（WinAppSDK 1.8 单文件 exe 改名会导致 XAML 解析崩溃）
           Copy-Item $exe.FullName (Join-Path stage $exe.Name) -Force
           Write-Host "EXE_NAME=$($exe.Name)"
-          "真 WinUI 3 原生版`n`n双击 exe 即可运行，无需安装任何东西。`n所有功能本地运行，不联网。" | Out-File -Encoding utf8 stage\使用说明.txt
-          Compress-Archive -Path stage\* -DestinationPath 表格工具箱-WinUI原生版.zip -Force
-          $f = Get-Item 表格工具箱-WinUI原生版.zip
-          Write-Host "ZIP_SIZE=$($f.Length)"
+          $f = Get-Item (Join-Path stage $exe.Name)
+          Write-Host "EXE_SIZE=$($f.Length)"
+          if (Test-Path app\TableToolbox\out\web) {
+            Copy-Item app\TableToolbox\out\web stage\web -Recurse -Force
+            Write-Host "WEB_COPIED"
+          } else {
+            Write-Error "web\index.html missing in publish output"; exit 1
+          }
+          "表格工具箱（原生窗口 + 原网页）`r`n`r`n双击 表格工具箱.exe 即可运行，无需安装。`r`n本窗口是原生应用窗口，里面的内容就是原来的表格工具箱网页，功能与网页完全一致。`r`n注意：web 文件夹要和 exe 放在同一目录，不要只拷 exe。" | Out-File -Encoding utf8 stage\使用说明.txt
+          Compress-Archive -Path stage\* -DestinationPath 表格工具箱-原生窗口版.zip -Force
+          $z = Get-Item 表格工具箱-原生窗口版.zip
+          Write-Host "ZIP_SIZE=$($z.Length)"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: toolbox-exe
+          path: 表格工具箱-原生窗口版.zip
 
       - name: Publish Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: winui-v1
-          name: 表格工具箱 - 真 WinUI 原生版
+          tag_name: winui-v2
+          name: 表格工具箱 - 原生窗口版（内容即原网页）
           body: |
-            真 WinUI 3 原生界面（Fluent / Mica），自包含单文件 exe，双击即用，完全离线。
-            包含识别 / 对比 / 派生三合一功能。
-          files: 表格工具箱-WinUI原生版.zip
+            WinUI 3 原生窗口，内容区直接承载您原来的表格工具箱网页，逻辑一字未改。
+            识别 / 对比 / 派生 / 导入导出 与网页版完全一致，完全离线。
+            解压后双击 表格工具箱.exe（web 文件夹要和 exe 放一起）。
+          files: 表格工具箱-原生窗口版.zip
           generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

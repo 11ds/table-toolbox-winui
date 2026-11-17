@@ -21,12 +21,6 @@ namespace TableToolbox
             catch { }
         }
 
-        // Shared state passed from compare page to derive page (scheme C: derive is based on compare result)
-        public static CompareCore.CompareResult SharedCompare;
-        public static System.Collections.Generic.List<CompareCore.Table> SharedTables;
-        public static CompareCore.CompareConfig SharedConfig;
-        public static string SharedSig;
-
         public App()
         {
             Log("=== App ctor start ===");
@@ -70,11 +64,15 @@ namespace TableToolbox
                 IntPtr hWnd = WinRT.Interop.WindowNative.GetWindowHandle(RootWindow);
                 WindowId id = Win32Interop.GetWindowIdFromWindow(hWnd);
                 AppWindow apw = AppWindow.GetFromWindowId(id);
+                apw.Title = "表格工具箱";
+
                 var display = Microsoft.UI.Windowing.DisplayArea.Primary;
                 if (display != null)
                 {
-                    int w = 1360, h = 860;
                     var area = display.WorkArea;
+                    // 尽量占满工作区，网页版原本就是宽屏布局
+                    int w = Math.Min(1500, Math.Max(1100, area.Width - 80));
+                    int h = Math.Min(980, Math.Max(760, area.Height - 60));
                     int x = area.X + Math.Max(0, (area.Width - w) / 2);
                     int y = area.Y + Math.Max(0, (area.Height - h) / 2);
                     apw.MoveAndResize(new Windows.Graphics.RectInt32(x, y, w, h));

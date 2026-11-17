@@ -37,9 +37,11 @@
     <Manifest Include="$(ApplicationManifest)" />
   </ItemGroup>
 
-  <!-- OCR engine scripts are embedded and extracted at runtime to %LOCALAPPDATA% -->
+  <!-- 原网页随 exe 一起发布到 web\index.html，程序启动时读它 -->
   <ItemGroup>
-    <Compile Remove="runtime-src\**\*.cs" />
-    <EmbeddedResource Include="runtime-src\**\*" />
+    <Content Include="web\index.html">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
   </ItemGroup>
 </Project>

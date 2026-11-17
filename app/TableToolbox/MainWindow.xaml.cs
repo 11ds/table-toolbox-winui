@@ -1,9 +1,9 @@
+using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.Web.WebView2.Core;
 using System;
 using System.IO;
-using System.Reflection;
 using System.Threading.Tasks;
 
 namespace TableToolbox
@@ -22,6 +22,7 @@ namespace TableToolbox
         {
             this.InitializeComponent();
             this.Title = "表格工具箱";
+            SetupChrome();
             // 等控件真正进入可视树再初始化 WebView2，避免过早调用失败
             Web.Loaded += (s, e) =>
             {
@@ -29,6 +30,27 @@ namespace TableToolbox
                 started = true;
                 _ = StartupAsync();
             };
+        }
+
+        /// <summary>纯外观：隐藏系统标题栏，改用自绘 40px 标题栏；最小化/最大化/关闭仍是系统原生按钮。</summary>
+        private void SetupChrome()
+        {
+            try
+            {
+                IntPtr hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+                var apw = Microsoft.UI.Windowing.AppWindow.GetFromWindowId(
+                    Win32Interop.GetWindowIdFromWindow(hWnd));
+                apw.TitleBar.ExtendsContentIntoTitleBar = true;
+                apw.TitleBar.ButtonBackgroundColor = Microsoft.UI.Colors.Transparent;
+                apw.TitleBar.ButtonInactiveBackgroundColor = Microsoft.UI.Colors.Transparent;
+                apw.TitleBar.ButtonForegroundColor = Microsoft.UI.Colors.Black;
+                apw.TitleBar.ButtonInactiveForegroundColor = Microsoft.UI.Colors.Gray;
+                SetTitleBar(AppTitleBar);
+            }
+            catch (Exception ex)
+            {
+                App.Log("SetupChrome FAIL: " + ex.Message);
+            }
         }
 
         private async Task StartupAsync()

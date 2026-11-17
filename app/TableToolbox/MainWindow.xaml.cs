@@ -90,6 +90,18 @@ namespace TableToolbox
                 core.Settings.IsZoomControlEnabled = true;
                 core.Settings.AreBrowserAcceleratorKeysEnabled = true;
 
+                // 允许从资源管理器把文件拖进页面（默认即为 true，这里显式置位，避免不同版本默认值差异）
+                try
+                {
+                    var prop = Web.GetType().GetProperty("AllowExternalDrop");
+                    if (prop != null && prop.CanWrite) prop.SetValue(Web, true);
+                    else App.Log("AllowExternalDrop: property not found (skip)");
+                }
+                catch (Exception ex)
+                {
+                    App.Log("AllowExternalDrop FAIL: " + ex.Message);
+                }
+
                 // 网页里用 Blob 导出 Excel/CSV，交给 WebView2 默认下载流程（存到「下载」）
                 core.NewWindowRequested += Core_NewWindowRequested;
                 core.PermissionRequested += (s, e) => { e.State = CoreWebView2PermissionState.Allow; };

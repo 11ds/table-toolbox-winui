@@ -7,19 +7,19 @@
     xmlns:local="using:TableToolbox"
     Title="表格工具箱">
 
-    <Grid x:Name="RootGrid" RequestedTheme="Light" Background="#FFFFFF">
+    <Grid x:Name="RootGrid" RequestedTheme="Light" Background="#F3F3F3">
         <Grid.RowDefinitions>
             <RowDefinition Height="40"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
         <!-- 自绘标题栏：只是外观，不含任何业务逻辑 -->
-        <Grid x:Name="AppTitleBar" Grid.Row="0" Height="40" Background="#FFFFFF">
+        <Grid x:Name="AppTitleBar" Grid.Row="0" Height="40" Background="#F3F3F3">
             <StackPanel Orientation="Horizontal"
                         VerticalAlignment="Center"
                         Margin="14,0,0,0"
                         Spacing="10">
-                <Border Width="22" Height="22" CornerRadius="6" Background="#2F6BFF">
+                <Border Width="22" Height="22" CornerRadius="6" Background="#0067C0">
                     <TextBlock Text="表"
                                FontSize="12"
                                FontWeight="SemiBold"
@@ -30,18 +30,18 @@
                 <TextBlock Text="表格工具箱"
                            FontSize="13"
                            FontWeight="SemiBold"
-                           Foreground="#1F2328"
+                           Foreground="#1B1B1B"
                            VerticalAlignment="Center"/>
-                <Border Width="1" Height="12" Background="#E3E6EA" VerticalAlignment="Center"/>
+                <Border Width="1" Height="12" Background="#E0E0E0" VerticalAlignment="Center"/>
                 <TextBlock Text="本地离线 · 数据不出电脑"
                            FontSize="11"
-                           Foreground="#8A9099"
+                           Foreground="#8A8A8A"
                            VerticalAlignment="Center"/>
             </StackPanel>
         </Grid>
 
         <!-- 标题栏下细分隔线 -->
-        <Border Grid.Row="0" Height="1" VerticalAlignment="Bottom" Background="#EDEFF2"/>
+        <Border Grid.Row="0" Height="1" VerticalAlignment="Bottom" Background="#E8E8E8"/>
 
         <!-- 网页内容区：原页面原样承载 -->
         <Grid Grid.Row="1">
@@ -54,24 +54,24 @@
                         VerticalAlignment="Center"
                         Spacing="16"
                         MaxWidth="520">
-                <Border Width="56" Height="56" CornerRadius="14" Background="#F1F4F9" HorizontalAlignment="Center">
+                <Border Width="56" Height="56" CornerRadius="14" Background="#EDF4FB" HorizontalAlignment="Center">
                     <TextBlock Text="表"
                                FontSize="24"
                                FontWeight="SemiBold"
-                               Foreground="#2F6BFF"
+                               Foreground="#0067C0"
                                HorizontalAlignment="Center"
                                VerticalAlignment="Center"/>
                 </Border>
                 <TextBlock Text="页面没加载起来"
                            FontSize="18"
                            FontWeight="SemiBold"
-                           Foreground="#1F2328"
+                           Foreground="#1B1B1B"
                            HorizontalAlignment="Center"/>
                 <TextBlock x:Name="FallbackText"
                            TextWrapping="Wrap"
                            TextAlignment="Center"
                            FontSize="13"
-                           Foreground="#6B7280"/>
+                           Foreground="#5C5C5C"/>
                 <Button Content="用系统浏览器打开"
                         HorizontalAlignment="Center"
                         Click="OpenInBrowser_Click"/>

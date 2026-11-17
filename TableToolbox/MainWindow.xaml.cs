@@ -26,10 +26,10 @@ namespace TableToolbox
             {
                 IntPtr hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
                 var windowId = Win32Interop.GetWindowIdFromWindow(hWnd);
-                var appWindow = AppWindow.GetFromWindowId(windowId);
+                var appWindow = Microsoft.UI.Windowing.AppWindow.GetFromWindowId(windowId);
                 appWindow.TitleBar.ExtendsContentIntoTitleBar = true;
-                appWindow.TitleBar.ButtonBackgroundColor = Windows.UI.Colors.Transparent;
-                appWindow.TitleBar.ButtonInactiveBackgroundColor = Windows.UI.Colors.Transparent;
+                appWindow.TitleBar.ButtonBackgroundColor = Microsoft.UI.Colors.Transparent;
+                appWindow.TitleBar.ButtonInactiveBackgroundColor = Microsoft.UI.Colors.Transparent;
                 SetTitleBar(TitleBar);
             }
             catch { }

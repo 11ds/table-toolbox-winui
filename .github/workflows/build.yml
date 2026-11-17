@@ -111,27 +111,25 @@ jobs:
       - name: Publish Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: winui-v7
-          name: 表格工具箱 - 便携版 v7（单文件 · 不再生成文件夹 · 拖放修复）
+          tag_name: winui-v8
+          name: 表格工具箱 - 便携版 v8（单文件 · 不再生成文件夹 · 拖放修复）
           body: |
-            **下载 `表格工具箱.exe` 直接双击就能用**（zip 里是同一份 exe + 说明，可选）。
-            exe 不要改名 —— Windows App SDK 单文件包改名会启动报错。
+            **用法**：下载 `TableToolbox-Portable.zip` → 解压 → 双击里面的 `表格工具箱.exe`。
+            exe 内部名是「表格工具箱」，**不要改文件名**（Windows App SDK 单文件包改名会启动报错）。
 
-            本版修的三个问题：
+            本版改动：
             1. **双击后 exe 旁边不再多出文件夹**：WebView2 的缓存目录改到
                `%LOCALAPPDATA%\TableToolbox\`，exe 所在文件夹只剩它自己；旧版本留下的
                `表格工具箱.exe.WebView2` 会在启动时自动清掉。
             2. **拖放提示框松手后不再卡住**：原生拖放接管后页面收不到 drop，导致「松开即可导入」
                一直挂着；现在落点即收（另加 4 秒看门狗兜底）。同一次拖放也不会再被导入两遍。
-            3. 更像原生窗口：记住上次的窗口位置和大小、最小尺寸限制（980×620）、关掉后退手势和
-               表单自动填充、非输入区域不再是网页的 I 型光标、外壳文字不可选中、滚到边界不回弹、
-               键盘操作才有焦点框。
+            3. 更像原生窗口：记住上次的窗口位置和大小、最小尺寸限制（980×620）、首次启动按 DPI
+               换算尺寸、关掉后退手势和表单自动填充、非输入区域不再是网页的 I 型光标、
+               外壳文字不可选中、滚到边界不回弹、键盘操作才有焦点框。
 
             v6 的应用化布局（左栏导航 + 顶栏 + 两栏内容）、离线单文件、拖放导入全部保留；
             上传 / 解析 / 对比 / 派生 / 导出的流程一行逻辑都没改。
-          files: |
-            stage/表格工具箱.exe
-            TableToolbox-Portable.zip
+          files: TableToolbox-Portable.zip
           generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

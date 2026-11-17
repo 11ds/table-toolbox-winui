@@ -73,7 +73,7 @@ namespace TableToolbox
                 AppWindow apw = AppWindow.GetFromWindowId(id);
                 apw.Title = "表格工具箱";
 
-                RestoreBounds(apw);
+                RestoreBounds(apw, hWnd);
                 HookMinSize(hWnd);
                 apw.Closing += (s, e) => SaveBounds(apw);
                 Log("Window size set");
@@ -96,7 +96,7 @@ namespace TableToolbox
             public bool max { get; set; }
         }
 
-        private static void RestoreBounds(AppWindow apw)
+        private static void RestoreBounds(AppWindow apw, IntPtr hWnd)
         {
             var area = DisplayArea.Primary.WorkArea;
             WindowState st = null;
@@ -121,16 +121,27 @@ namespace TableToolbox
                 {
                     w = Math.Min(st.w, area.Width);
                     h = Math.Min(st.h, area.Height);
-                    x = Math.Max(area.X, Math.Min(st.x, area.X + area.Width - 200));
-                    y = Math.Max(area.Y, Math.Min(st.y, area.Y + area.Height - 120));
+                    // 整窗都留在工作区内，别只露出边角
+                    x = Math.Max(area.X, Math.Min(st.x, area.X + area.Width - w));
+                    y = Math.Max(area.Y, Math.Min(st.y, area.Y + area.Height - h));
                     useSaved = true;
                     goto apply;
                 }
             }
 
-            // 首次运行：居中给一个宽松的尺寸，网页版原本就是宽屏布局
-            w = Math.Min(1500, Math.Max(1100, area.Width - 80));
-            h = Math.Min(980, Math.Max(760, area.Height - 60));
+            // 首次运行：按当前 DPI 换算成 DIP 再定尺寸，4K/150% 上不会变成一个小窗口
+            double scale = 1.0;
+            try
+            {
+                uint dpi = GetDpiForWindow(hWnd);
+                if (dpi > 0) scale = dpi / 96.0;
+            }
+            catch { }
+
+            w = Math.Min((int)(1440 * scale), area.Width - (int)(60 * scale));
+            h = Math.Min((int)(900 * scale), area.Height - (int)(50 * scale));
+            if (w < MinWidthDip) w = Math.Min(MinWidthDip, area.Width);
+            if (h < MinHeightDip) h = Math.Min(MinHeightDip, area.Height);
             x = area.X + Math.Max(0, (area.Width - w) / 2);
             y = area.Y + Math.Max(0, (area.Height - h) / 2);
 

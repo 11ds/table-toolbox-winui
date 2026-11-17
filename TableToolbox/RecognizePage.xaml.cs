@@ -1,6 +1,8 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Windows.Storage.Pickers;
+using Windows.Storage;
+using Windows.ApplicationModel.DataTransfer;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -40,10 +42,65 @@ namespace TableToolbox
 
                 var file = await picker.PickSingleFileAsync();
                 if (file == null) return;
-                _path = file.Path;
-                TxtFile.Text = file.Name;
-                BtnRecognize.IsEnabled = true;
-                TxtStats.Text = "";
+                AcceptFile(file.Path, file.Name);
+            }
+            catch (Exception ex)
+            {
+                await ShowError(ex.Message);
+            }
+        }
+
+        private static readonly string[] SupportedExts =
+        {
+            ".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff",
+            ".pdf", ".xlsx", ".xls", ".csv", ".et", ".wps"
+        };
+
+        private static bool IsSupported(string name)
+        {
+            string ext = System.IO.Path.GetExtension(name ?? "").ToLowerInvariant();
+            foreach (string x in SupportedExts) if (x == ext) return true;
+            return false;
+        }
+
+        private void AcceptFile(string path, string name)
+        {
+            _path = path;
+            TxtFile.Text = name;
+            BtnRecognize.IsEnabled = true;
+            TxtStats.Text = "";
+        }
+
+        // Drag a file anywhere onto this page.
+        private void Root_DragOver(object sender, DragEventArgs e)
+        {
+            e.AcceptedOperation = DataPackageOperation.Copy;
+            try
+            {
+                e.DragUIOverride.Caption = "松开即可识别";
+                e.DragUIOverride.IsCaptionVisible = true;
+                e.DragUIOverride.IsGlyphVisible = true;
+            }
+            catch { }
+        }
+
+        private async void Root_Drop(object sender, DragEventArgs e)
+        {
+            try
+            {
+                if (!e.DataView.Contains(StandardDataFormats.StorageItems)) return;
+                var items = await e.DataView.GetStorageItemsAsync();
+                if (items == null || items.Count == 0) return;
+                StorageFile f = items[0] as StorageFile;
+                if (f == null) return;
+                if (!IsSupported(f.Name))
+                {
+                    await ShowError("不支持这个文件类型：\n" + f.Name +
+                                    "\n\n支持：图片（png/jpg/bmp/tif）、PDF、Excel、CSV、WPS");
+                    return;
+                }
+                AcceptFile(f.Path, f.Name);
+                await DoRecognize();   // dropped files start right away
             }
             catch (Exception ex)
             {
@@ -52,6 +109,11 @@ namespace TableToolbox
         }
 
         private async void BtnRecognize_Click(object sender, RoutedEventArgs e)
+        {
+            await DoRecognize();
+        }
+
+        private async Task DoRecognize()
         {
             if (string.IsNullOrEmpty(_path)) return;
             Busy.IsActive = true; Busy.Visibility = Visibility.Visible;

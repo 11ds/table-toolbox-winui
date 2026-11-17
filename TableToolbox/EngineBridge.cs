@@ -180,8 +180,11 @@ namespace TableToolbox
 
             ProcessStartInfo psi = new ProcessStartInfo();
             psi.FileName = ps;
+            // Pass the request as base64 so quotes, backslashes and non-ASCII
+            // paths survive the command line intact (PowerShell 5.1 mangles them).
+            string b64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(json ?? "{}"));
             psi.Arguments = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"" + engine +
-                            "\" -Action " + action + " -Json \"" + EscapeArg(json) + "\"";
+                            "\" -Action " + action + " -B64 \"" + b64 + "\"";
             psi.CreateNoWindow = true;
             psi.UseShellExecute = false;
             psi.RedirectStandardOutput = true;
@@ -218,11 +221,6 @@ namespace TableToolbox
             string sys = Environment.GetFolderPath(Environment.SpecialFolder.System);
             string p = Path.Combine(sys, "WindowsPowerShell", "v1.0", "powershell.exe");
             return File.Exists(p) ? p : "powershell.exe";
-        }
-
-        private static string EscapeArg(string s)
-        {
-            return (s ?? "").Replace("`", "``").Replace("\"", "`\"");
         }
     }
 }

@@ -15,7 +15,7 @@ namespace TableToolbox
             if (!string.IsNullOrEmpty(_dir) && Directory.Exists(_dir)) return _dir;
 
             string local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            string dir = Path.Combine(local, "表格工具箱", "runtime-winui-v1");
+            string dir = Path.Combine(local, "表格工具箱", "runtime-winui-v2");
             string marker = Path.Combine(dir, ".ok");
             string[] names = { "engine.ps1", "core.cs", "book.cs", "biff.cs", "office_helper.ps1", "run_engine.ps1" };
 

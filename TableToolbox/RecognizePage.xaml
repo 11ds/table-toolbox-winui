@@ -7,7 +7,7 @@
     xmlns:local="using:TableToolbox"
     Background="Transparent">
 
-    <Grid Padding="24,16,24,20">
+    <Grid Padding="24,16,24,20" AllowDrop="True" DragOver="Root_DragOver" Drop="Root_Drop">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -17,7 +17,7 @@
 
         <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,16">
             <TextBlock Text="表格识别" FontSize="24" FontWeight="SemiBold"/>
-            <TextBlock Text="把照片、PDF、Excel 或 WPS 表格转成可编辑数据，全部在本机完成。" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+            <TextBlock Text="把照片、PDF、Excel 或 WPS 表格转成可编辑数据，全部在本机完成。也可以把文件直接拖进窗口。" FontSize="13" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"/>
         </StackPanel>
 
         <Border Grid.Row="1" CornerRadius="10" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"

@@ -37,6 +37,7 @@
 
   <!-- OCR engine scripts are embedded and extracted at runtime to %LOCALAPPDATA% -->
   <ItemGroup>
+    <Compile Remove="runtime-src\**\*.cs" />
     <EmbeddedResource Include="runtime-src\**\*" />
   </ItemGroup>
 </Project>
